@@ -19,7 +19,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached || (request.mode === 'navigate' ? caches.match('/app/') : undefined));
+        .catch(() => cached || (request.mode === 'navigate' ? caches.match(new URL('app/', self.registration.scope).href) : undefined));
       return cached || network;
     })
   );
