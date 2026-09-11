@@ -2,7 +2,7 @@
   "name": "Accountability",
   "short_name": "Accountability",
   "description": "Keep your promises, together. Habit tracking with a partner who notices.",
-  "start_url": "app/",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#faf5e9",

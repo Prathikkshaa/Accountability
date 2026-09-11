@@ -139,7 +139,7 @@ export default function YouPage() {
         <p className="text-[11px] text-muted-foreground">Toggles save on this device. Reminders fire while the app is open or installed.</p>
       </section>
 
-      <a href="/" className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+      <a href="/" onClick={() => { try { localStorage.removeItem('onboarded'); } catch {} }} className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
         <RotateCcw className="w-4 h-4" /> Replay onboarding
       </a>
 

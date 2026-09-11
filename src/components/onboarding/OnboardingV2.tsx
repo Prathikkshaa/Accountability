@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, Copy, Loader2, Lock, ShieldCheck, Users, Sparkles, Plus, RefreshCw, X } from 'lucide-react';
 import { clsx } from 'clsx';
 import { PromiseList } from './PromiseList';
@@ -48,8 +49,15 @@ const timingToReminder = (t: string): string | undefined => {
 const PROGRESS_ORDER: Moment[] = ['goal', 'commit', 'why', 'you', 'invite'];
 
 export function OnboardingV2() {
+  const router = useRouter();
   const [moment, setMoment] = useState<Moment>('welcome');
   const [history, setHistory] = useState<Moment[]>(['welcome']);
+
+  // First-run gate: once someone has finished onboarding, jump straight
+  // to the app on future launches instead of showing it again.
+  useEffect(() => {
+    try { if (localStorage.getItem('onboarded') === '1') router.replace('/app'); } catch {}
+  }, [router]);
 
   const [name, setName] = useState('');
   const [goals, setGoals] = useState<SelectedGoal[]>([]);
@@ -482,7 +490,7 @@ export function OnboardingV2() {
 
             <PromiseList className="text-left" name={name} timing={timing} reason={reason} promises={goals} />
 
-            <a href="/app" className="block w-full px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full hover:opacity-90 transition-all">
+            <a href="/app" onClick={() => { try { localStorage.setItem('onboarded', '1'); } catch {} }} className="block w-full px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full hover:opacity-90 transition-all">
               Enter my space
             </a>
             <button type="button" onClick={resetAll} className="text-xs font-medium text-muted-foreground hover:text-foreground">Replay</button>
