@@ -6,6 +6,8 @@ Most habit trackers are lonely. You start strong, then quietly fall off, because
 
 Built with Next.js 15, React 19, TypeScript, and Tailwind. Warm, minimal, mobile-first, installable as an app.
 
+**▶ Live app: <https://prathikkshaa.github.io/Accountability/app/>** — it's a fully client-side, offline PWA. Your data lives on your device (localStorage); there's no server.
+
 ---
 
 ## What it does
@@ -47,23 +49,27 @@ The app is currently scoped to a seeded demo user ("Tara"), who already has part
 | `npm run start` | run the production build |
 | `npm run lint` | lint |
 
-## Install it on your phone (as an app)
+## Install it on your phone
 
-This is a **PWA**, so it installs to your home screen and runs full-screen like a native app. It first needs to be reachable over HTTPS (deploy it, see below).
+It's a **PWA** — it installs to your home screen and runs full-screen like a native app, fully offline.
 
-**Android (Chrome):** open the deployed URL → menu (⋮) → **Install app** / **Add to Home screen**. Chrome packages it as a **WebAPK** — a real installed app on your device, no sideloading.
+**Android (Chrome):** open **<https://prathikkshaa.github.io/Accountability/app/>** → menu (⋮) → **Install app** / **Add to Home screen**. Chrome packages it as a **WebAPK** — a real installed app on your device.
 
 **iOS (Safari):** open the URL → Share → **Add to Home Screen**.
 
-**Want an actual `.apk` file?** Use [PWABuilder](https://www.pwabuilder.com): paste the deployed URL, choose **Android**, and it generates a signed **TWA `.apk`** you can download and install.
+**Want an actual downloadable `.apk` file?**
+1. Go to **<https://www.pwabuilder.com>**.
+2. Paste **`https://prathikkshaa.github.io/Accountability/app/`** and hit Start.
+3. Choose **Android** → **Generate Package**.
+4. Download the `.apk` (use the "signed test package" for sideloading), copy it to your phone, and open it to install. (You may need to allow "install from unknown sources".)
 
 ## Deploy
 
-Any Node host works. The one caveat: the demo persists to a JSON file (`data/db.json`). On serverless platforms (e.g. Vercel) the filesystem is read-only/ephemeral, so **writes won't persist** — fine for a look-around, not for real use. For a persistent deployment, either run on a host with a writable disk (Render, Railway, Fly.io) or swap the store for a real database.
+The repo auto-deploys to **GitHub Pages** on every push to `main` via `.github/workflows/deploy.yml` (static export, base path `/Accountability`). Because the app is fully client-side, any static host works too — drop the `out/` folder (from `npm run build`) onto Netlify, Vercel, Cloudflare Pages, etc.
 
 ## Data & persistence
 
-`src/lib/store.ts` is a small storage engine over `data/db.json`. It seeds demo data on first run and enforces the real business rules (today-only check-ins, invite validation, nudge rate limits, disconnect cooldown, group size caps, streak math including grace/rescue). It's a prototype backend meant to be swapped for a real database.
+`src/lib/store.ts` is an isomorphic storage engine: in the browser it persists to **localStorage** (so the installed app works offline, per-device), and on a Node server it falls back to a JSON file. It seeds demo data on first run and enforces the real business rules (today-only check-ins, invite validation, nudge rate limits, disconnect cooldown, group size caps, streak math including grace/rescue). To reset the app, clear the site's storage. Swap this for a shared database when you add multi-user sync.
 
 ## Project structure
 
