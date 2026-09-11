@@ -1,0 +1,154 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Warm royal palette: navy primary, cream canvas, gold + burgundy accents */
+  --background: #faf5e9;   /* warm cream */
+  --foreground: #0b3a5d;   /* royal navy (text) */
+  --card: #fffdf7;         /* warm white surface */
+  --card-foreground: #0b3a5d;
+  --primary: #0b3a5d;      /* navy */
+  --primary-foreground: #faf5e9;
+  --muted: #f1e9d6;        /* soft cream */
+  --muted-foreground: #6d6552; /* warm taupe-brown */
+  --border: #e4dbc5;       /* taupe */
+  --accent: #0b3a5d;
+  --accent-foreground: #faf5e9;
+  --success: #1f7a4d;
+  --warning: #b8860b;
+  --danger: #8c1d40;       /* burgundy */
+  /* gold accent, used sparingly for momentum/celebration */
+  --warm: #c9a227;
+  --pattern: #e7dcc2;
+  --radius: 12px;
+}
+
+.dark {
+  --background: #0a1a26;   /* deep navy-black */
+  --foreground: #faf3e1;   /* cream text */
+  --card: #10222f;
+  --card-foreground: #faf3e1;
+  --primary: #f2e7cc;      /* warm cream/gold */
+  --primary-foreground: #0a1a26;
+  --muted: #16293a;
+  --muted-foreground: #b6a98c;
+  --border: #22394b;
+  --accent: #f2e7cc;
+  --accent-foreground: #0a1a26;
+  --success: #34b37a;
+  --warning: #e1c24e;
+  --danger: #c65177;       /* lighter burgundy for contrast */
+  --warm: #e1c24e;         /* gold */
+  --pattern: #16293a;
+}
+
+/* Alternate accent palettes (swap the hero hues; canvas stays warm/dark) */
+:root[data-theme="ink"] {
+  --foreground: #17150f;
+  --card-foreground: #17150f;
+  --primary: #17150f;
+  --primary-foreground: #faf5e9;
+  --accent: #17150f;
+  --warm: #b58a2e;
+}
+:root[data-theme="forest"] {
+  --foreground: #14362a;
+  --card-foreground: #14362a;
+  --primary: #1f6b4f;
+  --primary-foreground: #f6f7ef;
+  --accent: #1f6b4f;
+  --warm: #c9922a;
+}
+.dark[data-theme="ink"] {
+  --foreground: #f4f2ea;
+  --card-foreground: #f4f2ea;
+  --primary: #f4f2ea;
+  --primary-foreground: #17150f;
+  --accent: #f4f2ea;
+  --warm: #e0b452;
+}
+.dark[data-theme="forest"] {
+  --primary: #7fd0a9;
+  --primary-foreground: #08130e;
+  --accent: #7fd0a9;
+  --warm: #e0c24e;
+}
+
+/* Quiet warm paper: a single soft light from the top, no busy texture. */
+.bg-pattern {
+  background-color: var(--background);
+}
+.bg-pattern::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--warm) 6%, transparent), transparent 60%);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Editorial type: tighten large headings, relax reading text */
+h1, h2, h3 { letter-spacing: -0.02em; }
+.display { letter-spacing: -0.03em; font-weight: 800; font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em; color: var(--muted-foreground); }
+.tnum { font-variant-numeric: tabular-nums; }
+.hairline { border-color: var(--border); }
+
+/* Restrained animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes energyBurst {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes softPop {
+  0% { transform: scale(0.9); opacity: 0; }
+  60% { transform: scale(1.04); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes drift {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(120px) rotate(220deg); opacity: 0; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-rise-in {
+  animation: riseIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-soft-pop {
+  animation: softPop 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-energy {
+  animation: energyBurst 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-rise-in,
+  .animate-soft-pop,
+  .animate-energy { animation: none !important; }
+}
