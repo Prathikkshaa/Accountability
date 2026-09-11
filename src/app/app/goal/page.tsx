@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2, Pencil, Archive, RotateCcw, HeartHandshake, X, Lock, Eye, Coins } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { Goal, DailyCheckIn, MoodState, AccountabilityPartner } from '@/lib/types';
@@ -12,11 +12,18 @@ const MOOD_EMOJI: Record<MoodState, string> = { BAD: '😞', MEH: '😐', GOOD: 
 const FREQS = ['Every day', 'Weekdays', '3x a week', '2x a week'];
 const freqToPerWeek = (f: string) => (f === 'Every day' ? 7 : f === 'Weekdays' ? 5 : f === '3x a week' ? 3 : 2);
 const perWeekToFreq = (n?: number) => (n === 7 ? 'Every day' : n === 5 ? 'Weekdays' : n === 3 ? '3x a week' : '2x a week');
-
 const dateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-export default function GoalDetailPage() {
-  const { id } = useParams<{ id: string }>();
+export default function GoalDetailRoute() {
+  return (
+    <Suspense fallback={<div className="pt-10 text-center text-sm text-muted-foreground">Loading…</div>}>
+      <GoalDetail />
+    </Suspense>
+  );
+}
+
+function GoalDetail() {
+  const id = useSearchParams().get('id') || '';
   const router = useRouter();
   const [goal, setGoal] = useState<Goal | null>(null);
   const [checkIns, setCheckIns] = useState<DailyCheckIn[]>([]);
@@ -26,24 +33,21 @@ export default function GoalDetailPage() {
   const [showGrace, setShowGrace] = useState(false);
 
   const load = async () => {
-    const [d, p] = await Promise.all([getGoalDetail(id), getPartnerships()]);
-    setGoal(d.goal); setCheckIns(d.checkIns); setPartners(p); setLoading(false);
+    try {
+      const [d, p] = await Promise.all([getGoalDetail(id), getPartnerships()]);
+      setGoal(d.goal); setCheckIns(d.checkIns); setPartners(p);
+    } catch {} finally { setLoading(false); }
   };
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { if (id) load(); }, [id]);
 
-  if (loading || !goal) return <div className="space-y-3 animate-pulse pt-4"><div className="h-8 w-40 bg-muted rounded" /><div className="h-24 bg-muted rounded-2xl" /><div className="h-32 bg-muted rounded-2xl" /></div>;
+  if (loading || !goal) return <div className="space-y-3 animate-pulse pt-4"><div className="h-8 w-40 bg-muted rounded" /><div className="h-24 bg-muted rounded-2xl" /></div>;
 
   const completed = new Set(checkIns.filter(c => c.completed).map(c => c.date));
   const today = new Date();
-
-  // last 70 days heatmap
   const days: string[] = [];
   for (let i = 69; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); days.push(dateStr(d)); }
-
-  // this week strip (Mon..Sun-ish: last 7 days)
   const week: { label: string; date: string; done: boolean; isToday: boolean }[] = [];
   for (let i = 6; i >= 0; i--) { const d = new Date(today); d.setDate(d.getDate() - i); const ds = dateStr(d); week.push({ label: d.toLocaleDateString(undefined, { weekday: 'narrow' }), date: ds, done: completed.has(ds), isToday: i === 0 }); }
-
   const timeline = [...checkIns].filter(c => c.completed).reverse().slice(0, 8);
   const missedDays = week.filter(w => !w.done && !w.isToday).map(w => w.date);
 
@@ -59,7 +63,7 @@ export default function GoalDetailPage() {
 
       <div>
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight">{goal.name}</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight">{goal.name}</h1>
           {goal.visibility === 'PRIVATE' && <Lock className="w-4 h-4 text-muted-foreground" />}
         </div>
         <p className="text-sm text-muted-foreground">{goal.category} · {goalTargetSummary(goal)}</p>
@@ -72,49 +76,45 @@ export default function GoalDetailPage() {
         </div>
       )}
 
-      {/* Stats — editorial numerals, no boxes */}
       <div className="grid grid-cols-3 border-y border-border divide-x divide-border">
         <Stat label="Current" value={goal.currentStreak || 0} tint="var(--danger)" />
         <Stat label="Longest" value={goal.longestStreak || 0} tint="var(--warm)" />
         <Stat label="Total" value={goal.totalCompletions || 0} tint="var(--foreground)" />
       </div>
 
-      {/* This week */}
       <section className="space-y-2">
         <h2 className="text-[15px] font-bold text-foreground">This week</h2>
-        <div className="flex justify-between gap-1.5 rounded-2xl border border-border bg-card p-4">
+        <div className="flex justify-between gap-1.5 py-2">
           {week.map(w => (
             <div key={w.date} className="flex flex-col items-center gap-1.5">
               <span className="text-[10px] font-semibold text-muted-foreground uppercase">{w.label}</span>
-              <span className={clsx('w-8 h-8 rounded-full flex items-center justify-center', w.done ? 'bg-success text-white' : 'bg-muted', w.isToday && 'ring-2 ring-primary ring-offset-1 ring-offset-card')}>
-                {w.done ? <CheckCircle2 className="w-4 h-4" /> : <span className="w-1.5 h-1.5 rounded-full bg-border" />}
+              <span className={clsx('w-8 h-8 rounded-full flex items-center justify-center', w.done ? 'bg-foreground text-background' : 'bg-muted', w.isToday && 'ring-2 ring-warm ring-offset-1 ring-offset-background')}>
+                {w.done ? <CheckCircle2 className="w-4 h-4" /> : <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/30" />}
               </span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Heatmap */}
       <section className="space-y-2">
         <h2 className="text-[15px] font-bold text-foreground">Last 10 weeks</h2>
-        <div className="rounded-2xl border border-border bg-card p-4 overflow-x-auto">
+        <div className="overflow-x-auto py-1">
           <div className="grid grid-flow-col grid-rows-7 gap-1 w-max">
             {days.map(d => {
               const done = completed.has(d);
               const isToday = d === dateStr(today);
-              return <span key={d} title={d} className={clsx('w-3.5 h-3.5 rounded-[3px]', done ? 'bg-primary' : 'bg-muted', isToday && 'ring-1 ring-warm')} />;
+              return <span key={d} title={d} className={clsx('w-3.5 h-3.5 rounded-[3px]', done ? 'bg-foreground' : 'bg-muted', isToday && 'ring-1 ring-warm')} />;
             })}
           </div>
         </div>
       </section>
 
-      {/* Timeline */}
       {timeline.length > 0 && (
         <section className="space-y-2">
           <h2 className="text-[15px] font-bold text-foreground">Recent check-ins</h2>
-          <div className="space-y-2">
+          <div className="divide-y divide-border border-t border-border">
             {timeline.map(c => (
-              <div key={c.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3.5">
+              <div key={c.id} className="flex items-center gap-3 py-3">
                 {c.mood && <span className="text-xl">{MOOD_EMOJI[c.mood]}</span>}
                 {c.proofPhotoUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -122,7 +122,7 @@ export default function GoalDetailPage() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{new Date(c.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}{c.quantityCompleted ? ` · ${c.quantityCompleted} ${goal.targetUnit || ''}` : ''}</p>
-                  {c.note && <p className="text-xs text-muted-foreground italic truncate">"{c.note}"</p>}
+                  {c.note && <p className="text-[13px] text-muted-foreground italic truncate">“{c.note}”</p>}
                 </div>
               </div>
             ))}
@@ -130,7 +130,6 @@ export default function GoalDetailPage() {
         </section>
       )}
 
-      {/* Actions */}
       <div className="grid grid-cols-1 gap-2 pt-2">
         {partners.length > 0 && missedDays.length > 0 && (
           <button onClick={() => setShowGrace(true)} className="flex items-center justify-center gap-2 py-3 rounded-2xl border border-warm/50 text-warm font-semibold text-sm hover:bg-warm/10"><HeartHandshake className="w-4 h-4" /> Ask a partner for grace</button>
@@ -218,7 +217,7 @@ function GraceRequest({ goal, partner, missedDays, onClose, onSent }: { goal: Go
   return (
     <Sheet onClose={onClose} title={`Ask ${partner.partnerUser.name.split(' ')[0]} for grace`}>
       {sent ? (
-        <div className="py-8 text-center text-sm font-semibold">Grace requested 🤝</div>
+        <div className="py-8 text-center text-sm font-semibold">Grace requested.</div>
       ) : (
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">Missed days happen. Ask your partner to keep your streak alive this once.</p>

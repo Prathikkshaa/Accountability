@@ -1,13 +1,15 @@
-import fs from 'fs';
-import path from 'path';
 import {
   User, Goal, DailyCheckIn, InviteCode, Nudge, GraceRequest, StreakRescue, Group, SharedGoal, NotificationPref,
   MeasurementType, GoalVisibility, MoodState, InviteStatus, SharedGoalMode, AccountabilityPartner
 } from './types';
 import { getTodayDateString, getYesterdayDateString } from './utils';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
+// Isomorphic storage: in the browser we persist to localStorage (so the app
+// works fully offline / installed as a PWA with no server); on the server
+// (dev/API routes) we fall back to a JSON file. `eval('require')` hides the
+// Node modules from the client bundler so `fs` is never bundled.
+const isBrowser = typeof window !== 'undefined';
+const LS_KEY = 'accountability-db';
 
 export interface DBData {
   users: User[];
@@ -349,16 +351,20 @@ class StorageEngine {
     if (this.memoryData) return this.memoryData;
 
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      }
-      if (fs.existsSync(DB_FILE)) {
-        const raw = fs.readFileSync(DB_FILE, 'utf-8');
-        this.memoryData = JSON.parse(raw);
-        return this.memoryData!;
+      if (isBrowser) {
+        const raw = window.localStorage.getItem(LS_KEY);
+        if (raw) { this.memoryData = JSON.parse(raw); return this.memoryData!; }
+      } else {
+        const fs = eval('require')('fs');
+        const path = eval('require')('path');
+        const DB_FILE = path.join(process.cwd(), 'data', 'db.json');
+        if (fs.existsSync(DB_FILE)) {
+          this.memoryData = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
+          return this.memoryData!;
+        }
       }
     } catch (e) {
-      console.error('Failed reading DB file, using default seed:', e);
+      console.error('Failed reading DB, using default seed:', e);
     }
 
     const defaultData = getDefaultData();
@@ -370,12 +376,17 @@ class StorageEngine {
   public saveData(data: DBData): void {
     this.memoryData = data;
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
+      if (isBrowser) {
+        window.localStorage.setItem(LS_KEY, JSON.stringify(data));
+      } else {
+        const fs = eval('require')('fs');
+        const path = eval('require')('path');
+        const DATA_DIR = path.join(process.cwd(), 'data');
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        fs.writeFileSync(path.join(DATA_DIR, 'db.json'), JSON.stringify(data, null, 2), 'utf-8');
       }
-      fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (e) {
-      console.error('Failed to save DB file:', e);
+      console.error('Failed to save DB:', e);
     }
   }
 

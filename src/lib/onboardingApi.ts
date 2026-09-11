@@ -83,52 +83,41 @@ export function mapCommitmentToGoal(input: CommitmentInput): MappedGoal {
   };
 }
 
-async function post<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data?.error || `Request to ${url} failed`);
-  }
-  return data as T;
-}
-
 export interface CommitResult {
   userId: string;
   goalIds: string[];
   inviteCode: string;
 }
 
-// Runs the whole "make it real" transaction: create the user, one goal per
-// promise, and an invite code. Returns the ids + the real code to display.
+// Runs the whole "make it real" transaction against the in-browser store:
+// create the user, one goal per promise, and an invite code.
 export async function commitOnboarding(params: {
   name: string;
   commitments: CommitmentInput[];
   reminderTime?: string;
 }): Promise<CommitResult> {
-  const { currentUser } = await post<{ currentUser: { id: string } }>('/api/auth/me', {
+  const { dbStore } = await import('./store');
+  const { getTodayDateString } = await import('./utils');
+
+  const user = dbStore.createUser({
     name: params.name,
+    email: `${params.name.toLowerCase().replace(/\s+/g, '')}@example.com`,
+    avatarUrl: '',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
   });
-  const userId = currentUser.id;
 
   const goalIds: string[] = [];
   for (const commitment of params.commitments) {
     const mapped = mapCommitmentToGoal(commitment);
-    const { goal } = await post<{ goal: { id: string } }>('/api/goals', {
-      userId,
+    const goal = dbStore.createGoal({
+      userId: user.id,
       ...mapped,
+      startDate: getTodayDateString(),
       reminderTime: params.reminderTime,
     });
     goalIds.push(goal.id);
   }
 
-  const { invite } = await post<{ invite: { code: string } }>('/api/pairing', {
-    action: 'GENERATE_INVITE',
-    userId,
-  });
-
-  return { userId, goalIds, inviteCode: invite.code };
+  const invite = dbStore.generateInviteCode(user.id);
+  return { userId: user.id, goalIds, inviteCode: invite.code };
 }

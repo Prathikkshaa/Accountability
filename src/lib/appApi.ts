@@ -1,106 +1,107 @@
-// Client-side API for the main app. Thin typed wrappers over the existing
-// route handlers, all scoped to the current user by default.
+// Client API — now backed directly by the in-browser store (localStorage),
+// so the app runs fully offline with no server. Functions stay async so the
+// pages that await them don't change.
 
-import type {
-  User, Goal, AccountabilityPartner, Nudge, GraceRequest, Group, MoodState,
-} from './types';
+import type { User, Goal, AccountabilityPartner, Nudge, GraceRequest, Group, MoodState, DailyCheckIn } from './types';
 import { CURRENT_USER_ID } from './session';
-
-async function jget<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `GET ${url} failed`);
-  return data as T;
-}
-async function jpost<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `POST ${url} failed`);
-  return data as T;
-}
+import { dbStore } from './store';
+import { getTodayDateString } from './utils';
 
 const uid = (u?: string) => u || CURRENT_USER_ID;
 
 /* ---- reads ---- */
-export const getMe = (u?: string) =>
-  jget<{ currentUser: User; allUsers: User[] }>(`/api/auth/me?userId=${uid(u)}`);
+export async function getMe(u?: string): Promise<{ currentUser: User; allUsers: User[] }> {
+  const currentUser = dbStore.getUser(uid(u)) || dbStore.getUser('user_tara')!;
+  return { currentUser, allUsers: dbStore.getAllUsers() };
+}
+export async function getGoals(u?: string): Promise<Goal[]> { return dbStore.getGoals(uid(u)); }
+export async function getPartnerships(u?: string): Promise<AccountabilityPartner[]> { return dbStore.getPartnerships(uid(u)); }
+export async function getNudges(u?: string): Promise<Nudge[]> { return dbStore.getNudges(uid(u)); }
+export async function getGroups(u?: string): Promise<Group[]> { return dbStore.getGroups(uid(u)); }
+export async function getPendingGrace(u?: string): Promise<GraceRequest[]> { return dbStore.getPendingGraceRequests(uid(u)); }
 
-export const getGoals = (u?: string) =>
-  jget<{ goals: Goal[] }>(`/api/goals?userId=${uid(u)}`).then(r => r.goals);
-
-export const getPartnerships = (u?: string) =>
-  jget<{ partnerships: AccountabilityPartner[] }>(`/api/pairing?userId=${uid(u)}`).then(r => r.partnerships);
-
-export const getNudges = (u?: string) =>
-  jget<{ nudges: Nudge[] }>(`/api/nudges?userId=${uid(u)}`).then(r => r.nudges);
-
-export const getGroups = (u?: string) =>
-  jget<{ groups: Group[] }>(`/api/groups?userId=${uid(u)}`).then(r => r.groups);
-
-export const getPendingGrace = (u?: string) =>
-  jget<{ graceRequests: GraceRequest[] }>(`/api/grace?userId=${uid(u)}`).then(r => r.graceRequests);
+export async function getGoalDetail(goalId: string): Promise<{ goal: Goal; checkIns: DailyCheckIn[] }> {
+  const goal = dbStore.getGoalById(goalId);
+  if (!goal) throw new Error('Goal not found');
+  return { goal, checkIns: dbStore.getGoalCheckIns(goalId) };
+}
 
 /* ---- writes ---- */
-export const checkIn = (params: {
+export async function checkIn(params: {
   goalId: string; completed: boolean; date: string;
-  quantityCompleted?: number; note?: string; mood?: MoodState; userId?: string;
-}) => jpost<{ checkIn: any; streak: { currentStreak: number; longestStreak: number; totalCompletions: number } }>(
-  '/api/check-in', { ...params, userId: uid(params.userId) });
+  quantityCompleted?: number; note?: string; mood?: MoodState; proofPhotoUrl?: string; userId?: string;
+}) {
+  const res = dbStore.performCheckIn({ ...params, userId: uid(params.userId) });
+  if (!res.success) throw new Error(res.error || 'Check-in failed');
+  return { checkIn: res.checkIn, streak: dbStore.calculateStreak(params.goalId) };
+}
 
-export const sendNudge = (params: {
-  receiverId: string; goalId?: string; goalName?: string; message: string;
-  nudgeType?: Nudge['nudgeType']; senderId?: string;
-}) => jpost<{ nudge: Nudge }>('/api/nudges', { ...params, senderId: uid(params.senderId) });
+export async function sendNudge(params: {
+  receiverId: string; goalId?: string; goalName?: string; message: string; nudgeType?: Nudge['nudgeType']; senderId?: string;
+}) {
+  const res = dbStore.sendNudge({ ...params, senderId: uid(params.senderId), nudgeType: params.nudgeType || 'CUSTOM' });
+  if (!res.success) throw new Error(res.error || 'Could not send nudge');
+  return { nudge: res.nudge };
+}
 
-export const requestGrace = (params: {
-  goalId: string; date: string; reasonNote: string; reviewerId: string; userId?: string;
-}) => jpost<{ graceRequest: GraceRequest }>('/api/grace', { action: 'REQUEST', ...params, userId: uid(params.userId) });
+export async function requestGrace(params: { goalId: string; date: string; reasonNote: string; reviewerId: string; userId?: string }) {
+  const res = dbStore.requestGrace({ ...params, userId: uid(params.userId) });
+  if (!res.success) throw new Error(res.error || 'Could not request grace');
+  return { graceRequest: res.graceRequest };
+}
+export async function reviewGrace(graceId: string, status: 'APPROVED' | 'REJECTED', reviewerId?: string) {
+  const ok = dbStore.reviewGraceRequest(graceId, uid(reviewerId), status);
+  return { success: ok };
+}
+export async function rescueStreak(goalId: string, date: string, rescuedByUserId?: string) {
+  return dbStore.rescueStreak({ goalId, date, rescuedByUserId: uid(rescuedByUserId) });
+}
+export async function disconnectPartner(partnerId: string, userId?: string) {
+  const ok = dbStore.disconnectPartner(uid(userId), partnerId);
+  if (!ok) throw new Error('Partnership not found');
+  return { success: true };
+}
+export async function acceptInvite(code: string, userId?: string) {
+  return dbStore.validateAndAcceptInvite(code, uid(userId));
+}
+export async function generateInvite(userId?: string) {
+  return { invite: dbStore.generateInviteCode(uid(userId)) };
+}
+export async function createGroup(name: string, creatorId?: string) {
+  return { group: dbStore.createGroup(name, uid(creatorId)) };
+}
 
-export const reviewGrace = (graceId: string, status: 'APPROVED' | 'REJECTED', reviewerId?: string) =>
-  jpost<{ success: boolean }>('/api/grace', { action: 'REVIEW', graceId, status, reviewerId: uid(reviewerId) });
+export async function createGoal(goal: Partial<Goal> & { name: string; measurementType: Goal['measurementType'] }, userId?: string) {
+  const created = dbStore.createGoal({
+    userId: uid(userId),
+    name: goal.name,
+    category: goal.category || 'General',
+    description: goal.description,
+    measurementType: goal.measurementType,
+    targetValue: goal.targetValue ?? 1,
+    targetUnit: goal.targetUnit,
+    frequencyPerWeek: goal.frequencyPerWeek,
+    selectedDays: goal.selectedDays,
+    visibility: goal.visibility || 'PARTNER_VISIBLE',
+    startDate: getTodayDateString(),
+    reminderTime: goal.reminderTime,
+    stake: goal.stake,
+  });
+  return { goal: created };
+}
 
-export const rescueStreak = (goalId: string, date: string, rescuedByUserId?: string) =>
-  jpost<{ rescue: any }>('/api/rescue', { goalId, date, rescuedByUserId: uid(rescuedByUserId) });
-
-export const disconnectPartner = (partnerId: string, userId?: string) =>
-  jpost<{ success: boolean; message?: string }>('/api/pairing', { action: 'DISCONNECT', userId: uid(userId), partnerId });
-
-export const acceptInvite = (code: string, userId?: string) =>
-  jpost<{ success: boolean; error?: string }>('/api/pairing', { action: 'ACCEPT_INVITE', code, userId: uid(userId) });
-
-export const generateInvite = (userId?: string) =>
-  jpost<{ invite: { code: string } }>('/api/pairing', { action: 'GENERATE_INVITE', userId: uid(userId) });
-
-export const createGroup = (name: string, creatorId?: string) =>
-  jpost<{ group: Group }>('/api/groups', { action: 'CREATE', name, creatorId: uid(creatorId) });
-
-export const createGoal = (goal: Partial<Goal> & { name: string; measurementType: Goal['measurementType'] }, userId?: string) =>
-  jpost<{ goal: Goal }>('/api/goals', { userId: uid(userId), ...goal });
-
-export const patchGoal = async (goalId: string, updates: Partial<Goal>) => {
-  const res = await fetch(`/api/goals/${goalId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Update failed');
-  return data.goal as Goal;
-};
-
-export const archiveGoal = async (goalId: string) => {
-  const res = await fetch(`/api/goals/${goalId}`, { method: 'DELETE' });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Archive failed');
-  return data;
-};
-
-export const restartGoal = async (goalId: string) => {
-  const res = await fetch(`/api/goals/${goalId}`, { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || 'Restart failed');
-  return data.goal as Goal;
-};
-
-export const getGoalDetail = (goalId: string) =>
-  jget<{ goal: Goal; checkIns: import('./types').DailyCheckIn[] }>(`/api/goals/${goalId}`);
+export async function patchGoal(goalId: string, updates: Partial<Goal>): Promise<Goal> {
+  const g = dbStore.updateGoal(goalId, updates);
+  if (!g) throw new Error('Update failed');
+  return g;
+}
+export async function archiveGoal(goalId: string) {
+  const ok = dbStore.archiveGoal(goalId);
+  if (!ok) throw new Error('Archive failed');
+  return { success: true };
+}
+export async function restartGoal(goalId: string): Promise<Goal> {
+  const g = dbStore.restartGoal(goalId);
+  if (!g) throw new Error('Restart failed');
+  return g;
+}

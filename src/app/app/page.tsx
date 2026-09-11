@@ -180,7 +180,7 @@ export default function TodayPage() {
           <button onClick={() => setShowNew(true)} className="w-full text-left py-6 text-sm text-muted-foreground border-t border-border hover:text-foreground">Nothing yet. Add the first thing you want to keep.</button>
         ) : (
           <div className="divide-y divide-border border-t border-border">
-            {goals.map(g => <GoalCheckRow key={g.id} goal={g} onToggle={onRowToggle} busy={busyId === g.id} href={`/app/goal/${g.id}`} />)}
+            {goals.map(g => <GoalCheckRow key={g.id} goal={g} onToggle={onRowToggle} busy={busyId === g.id} href={`/app/goal?id=${g.id}`} />)}
           </div>
         )}
       </section>

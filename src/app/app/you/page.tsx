@@ -79,7 +79,7 @@ export default function YouPage() {
         <div className="divide-y divide-border border-t border-border">
           {goals.map(g => (
             <div key={g.id} className="flex items-center gap-3 py-4">
-              <Link href={`/app/goal/${g.id}`} className="flex-1 min-w-0">
+              <Link href={`/app/goal?id=${g.id}`} className="flex-1 min-w-0">
                 <p className="font-semibold truncate">{g.name}</p>
                 <p className="text-[13px] text-muted-foreground">{g.category} · {goalTargetSummary(g)}</p>
               </Link>

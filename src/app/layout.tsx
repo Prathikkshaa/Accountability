@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Figtree } from 'next/font/google';
+import { PWARegister } from '@/components/PWARegister';
 import './globals.css';
 
 const figtree = Figtree({
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={figtree.variable}>
       <body className="antialiased">
+        <PWARegister />
         {children}
       </body>
     </html>
