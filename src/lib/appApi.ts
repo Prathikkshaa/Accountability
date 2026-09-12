@@ -58,12 +58,12 @@ function computeShared(aDates: string[], bDates: string[]) {
 }
 
 /* ---------------- auth / profile ---------------- */
-// Sends a magic link. When tapped on this device, Supabase completes the
-// sign-in and the app resumes (see OnboardingV2's return handler).
-export async function sendMagicLink(email: string, redirectTo: string) {
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
+// Google OAuth — one tap, no emails. Redirects to Google and back; the
+// session is picked up on return.
+export async function signInWithGoogle(redirectTo: string) {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo, queryParams: { prompt: 'select_account' } },
   });
   if (error) throw new Error(error.message);
 }

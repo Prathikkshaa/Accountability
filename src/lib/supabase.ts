@@ -12,7 +12,7 @@ export const VAPID_PUBLIC_KEY =
   'BCdYigeJCsVDO93qDWwFJPJK0bEmC8ZvqNcQFLYFFX2cCHlicMnSgrlKpD3usjuIy7x0XNGReKwWRNHCHdEMRp0';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'implicit' },
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: 'pkce' },
 });
 
 export async function currentUserId(): Promise<string | null> {
