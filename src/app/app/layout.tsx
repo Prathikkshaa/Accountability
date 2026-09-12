@@ -1,8 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Home, Heart, LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ThemeController } from '@/components/app/ThemeController';
@@ -23,12 +23,23 @@ const TABS: Tab[] = [
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+
+  // First-run gate: if onboarding hasn't been finished on this device, send
+  // any app screen back to onboarding first (covers direct /app links too).
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('onboarded') !== '1') { router.replace('/'); return; }
+    } catch {}
+    setReady(true);
+  }, [router]);
 
   return (
     <div className="bg-pattern min-h-screen text-foreground font-sans">
       <ThemeController />
-      <ReminderScheduler />
-      <div className="max-w-lg mx-auto w-full px-5 pb-28 pt-6 min-h-screen">{children}</div>
+      {ready && <ReminderScheduler />}
+      <div className="max-w-lg mx-auto w-full px-5 pb-28 pt-6 min-h-screen">{ready ? children : null}</div>
 
       {/* Bottom tab bar */}
       <nav className="fixed bottom-0 inset-x-0 z-40">
