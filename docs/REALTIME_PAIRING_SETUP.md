@@ -322,6 +322,84 @@ That's everything I need from you.
 
 ---
 
+---
+
+## Part 4b — Storage (profile pictures & proof photos)
+
+1. Left sidebar **Storage** → **New bucket** → name **`avatars`** → toggle **Public bucket ON** → Create.
+2. **New bucket** again → name **`proofs`** → **Public bucket ON** → Create.
+3. **SQL Editor** → New query → paste and Run:
+
+```sql
+-- Public read; each user can write only inside their own folder (uid/...)
+drop policy if exists media_read on storage.objects;
+create policy media_read on storage.objects for select
+  using (bucket_id in ('avatars','proofs'));
+
+drop policy if exists media_insert on storage.objects;
+create policy media_insert on storage.objects for insert
+  with check (bucket_id in ('avatars','proofs')
+              and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists media_update on storage.objects;
+create policy media_update on storage.objects for update
+  using (bucket_id in ('avatars','proofs')
+         and (storage.foldername(name))[1] = auth.uid()::text);
+
+drop policy if exists media_delete on storage.objects;
+create policy media_delete on storage.objects for delete
+  using (bucket_id in ('avatars','proofs')
+         and (storage.foldername(name))[1] = auth.uid()::text);
+```
+
+The app will save profile pics at `avatars/<your-id>/avatar.jpg` and proof photos at
+`proofs/<your-id>/<checkin>.jpg`. Public read keeps it simple for testing; partners
+see them, and the visibility of the *goal* still controls what shows.
+
+---
+
+## Part 4c — Background push (make nudges buzz the phone)
+
+This is the most involved part. If you'd rather, do Parts 1–4b first, tell me
+"pairing works," and we add push right after — otherwise do it all now.
+
+**1. Subscriptions table** — SQL Editor → Run:
+
+```sql
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  endpoint text not null unique,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now()
+);
+alter table public.push_subscriptions enable row level security;
+drop policy if exists push_own on public.push_subscriptions;
+create policy push_own on public.push_subscriptions for all
+  using (user_id = auth.uid()) with check (user_id = auth.uid());
+```
+
+**2. Create the Edge Function**
+- Left sidebar **Edge Functions** → **Create a new function** → name it exactly **`send-push`**.
+- Open the file `supabase/functions/send-push/index.ts` from the repo, copy all of it into the editor, and **Deploy**.
+- In the function's settings, turn **Verify JWT = OFF** (it's called by an internal webhook, not a logged-in user).
+
+**3. Add the function secrets** — **Project Settings → Edge Functions → Add secret** (add three):
+- `VAPID_PUBLIC` = `BCdYigeJCsVDO93qDWwFJPJK0bEmC8ZvqNcQFLYFFX2cCHlicMnSgrlKpD3usjuIy7x0XNGReKwWRNHCHdEMRp0`
+- `VAPID_PRIVATE` = **the private key I sent you in chat** (keep it secret — never commit it)
+- `VAPID_SUBJECT` = `mailto:` + your email (e.g. `mailto:you@gmail.com`)
+
+**4. Fire the function when a nudge is created** — **Database → Webhooks** → **Create a new hook**:
+- Name: `on_nudge_push`
+- Table: **`nudges`**, Events: **Insert**
+- Type: **Supabase Edge Functions** → choose **`send-push`**
+- Create.
+
+That's it — an inserted nudge now triggers a real push to the receiver's phone.
+
+---
+
 ## Part 5 — What I build once you're back (so you know the plan)
 
 **Auth + onboarding**
@@ -336,6 +414,17 @@ That's everything I need from you.
 - Real **invite → pair**: `generate_invite` / `accept_invite` link your two accounts.
 - **Live partner updates**: subscribe to realtime so a partner's check-in appears without refreshing.
 - Keep a small offline cache so the installed app still opens without signal and syncs later.
+
+**Photos**
+- Profile picture: upload from the You tab to the `avatars` bucket → shown to you and your partner.
+- Proof evidence: attach a photo in the check-in sheet → uploaded to `proofs` → your partner sees it on your check-in.
+
+**Push (once Part 4c is done)**
+- The app asks permission, subscribes the device, and stores it in `push_subscriptions`.
+- Your nudge inserts a row → the webhook calls `send-push` → your partner's phone buzzes even if the app is closed.
+
+**Join flow**
+- Sharing gives a tap-to-join link (`…/app/join?code=XXXXXX`); your partner taps it, does their own onboarding, and is auto-paired at the end.
 
 **Deploy**
 - Store URL + anon key as GitHub repo secrets, inject at build, redeploy to the same link.
