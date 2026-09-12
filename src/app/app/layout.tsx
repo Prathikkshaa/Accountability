@@ -8,7 +8,7 @@ import { clsx } from 'clsx';
 import { ThemeController } from '@/components/app/ThemeController';
 import { ReminderScheduler } from '@/components/app/ReminderScheduler';
 import { currentUserId } from '@/lib/supabase';
-import { acceptInvite } from '@/lib/appApi';
+import { acceptInvite, ensureProfile } from '@/lib/appApi';
 
 interface Tab {
   href: string;
@@ -33,6 +33,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     currentUserId()
       .then(async id => {
         if (!id) { router.replace('/'); return; }
+        await ensureProfile();
         // Auto-pair if they arrived via an invite link before signing in.
         try {
           const pending = localStorage.getItem('pendingInvite');

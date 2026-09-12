@@ -58,12 +58,13 @@ function computeShared(aDates: string[], bDates: string[]) {
 }
 
 /* ---------------- auth / profile ---------------- */
-export async function sendEmailCode(email: string) {
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-  if (error) throw new Error(error.message);
-}
-export async function verifyEmailCode(email: string, token: string) {
-  const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' });
+// Sends a magic link. When tapped on this device, Supabase completes the
+// sign-in and the app resumes (see OnboardingV2's return handler).
+export async function sendMagicLink(email: string, redirectTo: string) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, emailRedirectTo: redirectTo },
+  });
   if (error) throw new Error(error.message);
 }
 export async function upsertProfile(p: { name?: string; avatarUrl?: string; email?: string }) {
@@ -78,6 +79,19 @@ export async function upsertProfile(p: { name?: string; avatarUrl?: string; emai
   if (error) throw new Error(error.message);
 }
 export async function signOut() { await supabase.auth.signOut(); }
+
+// Guarantees a profile row exists (e.g. if a magic link opened in a browser
+// without the onboarding draft), so a partner always sees a name.
+export async function ensureProfile() {
+  const uid = await currentUserId();
+  if (!uid) return;
+  const { data } = await supabase.from('profiles').select('id').eq('id', uid).maybeSingle();
+  if (!data) {
+    const { data: sess } = await supabase.auth.getSession();
+    const email = sess.session?.user.email || '';
+    await supabase.from('profiles').upsert({ id: uid, name: email.split('@')[0] || 'Friend', email });
+  }
+}
 
 export async function getMe(): Promise<{ currentUser: User; allUsers: User[] }> {
   const uid = await currentUserId();

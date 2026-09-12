@@ -6,7 +6,7 @@ import { Check, Copy, Loader2, Lock, ShieldCheck, Users, Sparkles, Plus, Refresh
 import { clsx } from 'clsx';
 import { PromiseList } from './PromiseList';
 import { commitOnboarding, CommitmentInput } from '@/lib/onboardingApi';
-import { sendEmailCode, verifyEmailCode } from '@/lib/appApi';
+import { sendMagicLink, acceptInvite } from '@/lib/appApi';
 import { currentUserId } from '@/lib/supabase';
 
 type Moment = 'welcome' | 'goal' | 'commit' | 'why' | 'you' | 'verify' | 'invite' | 'done' | 'signin';
@@ -55,15 +55,41 @@ export function OnboardingV2() {
   const [moment, setMoment] = useState<Moment>('welcome');
   const [history, setHistory] = useState<Moment[]>(['welcome']);
 
-  // If already signed in, skip onboarding and go straight to the app.
+  // Handle returning from a magic link: if a session now exists, resume the
+  // saved onboarding draft (create profile + goals + invite), pair if joining,
+  // or just enter the app.
   useEffect(() => {
-    currentUserId().then(id => { if (id) router.replace('/app'); }).catch(() => {});
+    (async () => {
+      const id = await currentUserId();
+      if (!id) return;
+      let draft: any = null;
+      try { draft = JSON.parse(localStorage.getItem('onboardingDraft') || 'null'); } catch {}
+      if (draft) {
+        try {
+          const result = await commitOnboarding({
+            name: draft.name, email: draft.email, commitments: draft.commitments, reminderTime: draft.reminderTime,
+          });
+          try { localStorage.removeItem('onboardingDraft'); } catch {}
+          let pending: string | null = null;
+          try { pending = localStorage.getItem('pendingInvite'); } catch {}
+          if (pending) {
+            try { localStorage.removeItem('pendingInvite'); await acceptInvite(pending); } catch {}
+            router.replace('/app/partners'); return;
+          }
+          setName(draft.name); setGoals(draft.goals || []); setTiming(draft.timing || "I'll decide each day"); setReason(draft.reason || '');
+          setInviteCode(result.inviteCode); setCommitted(true);
+          setHistory(['invite']); setMoment('invite');
+          return;
+        } catch { /* fall through to app */ }
+      }
+      router.replace('/app');
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [goals, setGoals] = useState<SelectedGoal[]>([]);
   const [timing, setTiming] = useState<string>("I'll decide each day");
@@ -129,52 +155,39 @@ export function OnboardingV2() {
   };
 
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const redirectUrl = () => (typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '/');
 
-  // Step 1: send the 6-digit code to their email.
-  const handleSendCode = async () => {
+  // Onboarding: save the draft, then email a magic link. When they tap it,
+  // the return handler above finishes creating everything.
+  const handleSendLink = async () => {
     if (!name.trim() || !emailValid) return;
     setCommitting(true); setAuthError(null);
     try {
-      await sendEmailCode(email.trim());
-      setCodeSent(true);
+      const commitments: CommitmentInput[] = goals.map(g => ({ goal: g.label, amount: g.amount, frequency: g.freq, timing, category: g.category }));
+      try {
+        localStorage.setItem('onboardingDraft', JSON.stringify({
+          name: name.trim(), email: email.trim(), goals, timing, reason, commitments, reminderTime: timingToReminder(timing),
+        }));
+      } catch {}
+      await sendMagicLink(email.trim(), redirectUrl());
+      setLinkSent(true);
       goTo('verify');
     } catch (e: any) {
-      setAuthError(e?.message || 'Could not send the code. Try again.');
+      setAuthError(e?.message || 'Could not send the email. Try again.');
     } finally { setCommitting(false); }
   };
 
-  // Step 2: verify the code, then create profile + goals + invite.
-  const handleVerify = async () => {
-    if (code.trim().length < 6) return;
+  // Returning users: just email a link (no draft; the return handler sends
+  // them straight to the app).
+  const handleSignInLink = async () => {
+    if (!emailValid) return;
     setCommitting(true); setAuthError(null);
     try {
-      await verifyEmailCode(email.trim(), code.trim());
-      const commitments: CommitmentInput[] = goals.map(g => ({
-        goal: g.label, amount: g.amount, frequency: g.freq, timing, category: g.category,
-      }));
-      const result = await commitOnboarding({
-        name: name.trim() || 'Friend',
-        email: email.trim(),
-        commitments,
-        reminderTime: timingToReminder(timing),
-      });
-      setInviteCode(result.inviteCode);
-      setCommitted(true);
-      goTo('invite');
+      try { localStorage.removeItem('onboardingDraft'); } catch {}
+      await sendMagicLink(email.trim(), redirectUrl());
+      setLinkSent(true);
     } catch (e: any) {
-      setAuthError(e?.message || 'That code didn\'t work. Check and try again.');
-    } finally { setCommitting(false); }
-  };
-
-  // Returning users: sign in with email + code, then into the app.
-  const handleSignIn = async () => {
-    if (code.trim().length < 6) return;
-    setCommitting(true); setAuthError(null);
-    try {
-      await verifyEmailCode(email.trim(), code.trim());
-      router.push('/app');
-    } catch (e: any) {
-      setAuthError(e?.message || 'That code didn\'t work.');
+      setAuthError(e?.message || 'Could not send the email. Try again.');
     } finally { setCommitting(false); }
   };
 
@@ -244,7 +257,7 @@ export function OnboardingV2() {
               </button>
               <button
                 type="button"
-                onClick={() => { setCodeSent(false); setAuthError(null); goTo('signin'); }}
+                onClick={() => { setLinkSent(false); setAuthError(null); goTo('signin'); }}
                 className="text-sm font-medium text-muted-foreground hover:text-foreground"
               >
                 Already have an account? <span className="text-foreground font-semibold">Sign in</span>
@@ -441,7 +454,7 @@ export function OnboardingV2() {
               <p className="text-sm text-muted-foreground">Your name so your partner knows you, and an email to save your account.</p>
             </div>
 
-            <form onSubmit={e => { e.preventDefault(); if (name.trim() && emailValid && !committing) handleSendCode(); }} className="space-y-4">
+            <form onSubmit={e => { e.preventDefault(); if (name.trim() && emailValid && !committing) handleSendLink(); }} className="space-y-4">
               <input
                 autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
                 className="w-full text-2xl font-bold p-4 border-b-2 border-foreground bg-transparent focus:outline-none placeholder:text-muted-foreground/30"
@@ -459,60 +472,60 @@ export function OnboardingV2() {
                 type="submit" disabled={!name.trim() || !emailValid || committing}
                 className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40 hover:opacity-90 active:scale-[0.99] transition-all"
               >
-                {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Sending code…</>) : (<><Mail className="w-4 h-4" /> Email me a code</>)}
+                {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>) : (<><Mail className="w-4 h-4" /> Email me a sign-in link</>)}
               </button>
-              <p className="text-[11px] text-muted-foreground text-center">We'll email you a 6-digit code to confirm it's you.</p>
+              <p className="text-[11px] text-muted-foreground text-center">We'll email you a link. Tap it on this phone to finish.</p>
             </form>
           </div>
         )}
 
-        {/* VERIFY (onboarding) */}
+        {/* VERIFY (onboarding) — check your email for the link */}
         {moment === 'verify' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="space-y-6 animate-fade-in text-center">
+            <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center">
+              <Mail className="w-7 h-7" style={{ color: 'var(--warm)' }} />
+            </div>
             <div className="space-y-1.5">
               <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Check your email.</h2>
-              <p className="text-sm text-muted-foreground">We sent a 6-digit code to <span className="font-semibold text-foreground">{email}</span>.</p>
+              <p className="text-sm text-muted-foreground">We sent a sign-in link to <span className="font-semibold text-foreground">{email}</span>. Tap it <span className="font-semibold text-foreground">on this phone</span> to finish setting up.</p>
             </div>
-            <form onSubmit={e => { e.preventDefault(); if (!committing) handleVerify(); }} className="space-y-4">
-              <input
-                autoFocus value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                inputMode="numeric" placeholder="000000" maxLength={6}
-                className="w-full text-center text-3xl font-mono font-bold tracking-[0.4em] p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground"
-              />
-              {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
-              <button type="submit" disabled={code.length < 6 || committing} className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40">
-                {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Setting things up…</>) : 'Verify & finish'}
+            {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
+            <div className="space-y-2">
+              <button type="button" onClick={handleSendLink} disabled={committing} className="text-sm font-semibold text-foreground hover:opacity-70">
+                {committing ? 'Sending…' : 'Resend link'}
               </button>
-              <button type="button" onClick={handleSendCode} className="w-full text-center text-xs font-medium text-muted-foreground hover:text-foreground">Resend code</button>
-            </form>
+              <p className="text-[11px] text-muted-foreground">No email? Check spam. Built-in email can take a minute.</p>
+            </div>
           </div>
         )}
 
         {/* SIGN IN (returning users) */}
         {moment === 'signin' && (
           <div className="space-y-6 animate-fade-in">
-            <div className="space-y-1.5">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome back.</h2>
-              <p className="text-sm text-muted-foreground">{codeSent ? `Enter the code we sent to ${email}.` : 'Sign in with your email.'}</p>
-            </div>
-            {!codeSent ? (
-              <form onSubmit={e => { e.preventDefault(); if (emailValid && !committing) handleSendCode(); }} className="space-y-4">
-                <input autoFocus type="email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
-                  className="w-full text-base p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground" />
-                {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
-                <button type="submit" disabled={!emailValid || committing} className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40">
-                  {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>) : (<><Mail className="w-4 h-4" /> Email me a code</>)}
-                </button>
-              </form>
+            {!linkSent ? (
+              <>
+                <div className="space-y-1.5">
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome back.</h2>
+                  <p className="text-sm text-muted-foreground">Enter your email and we'll send a sign-in link.</p>
+                </div>
+                <form onSubmit={e => { e.preventDefault(); if (emailValid && !committing) handleSignInLink(); }} className="space-y-4">
+                  <input autoFocus type="email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
+                    className="w-full text-base p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground" />
+                  {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
+                  <button type="submit" disabled={!emailValid || committing} className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40">
+                    {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>) : (<><Mail className="w-4 h-4" /> Email me a link</>)}
+                  </button>
+                </form>
+              </>
             ) : (
-              <form onSubmit={e => { e.preventDefault(); if (!committing) handleSignIn(); }} className="space-y-4">
-                <input autoFocus value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="000000" maxLength={6}
-                  className="w-full text-center text-3xl font-mono font-bold tracking-[0.4em] p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground" />
-                {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
-                <button type="submit" disabled={code.length < 6 || committing} className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40">
-                  {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>) : 'Sign in'}
-                </button>
-              </form>
+              <div className="text-center space-y-6">
+                <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center"><Mail className="w-7 h-7" style={{ color: 'var(--warm)' }} /></div>
+                <div className="space-y-1.5">
+                  <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Check your email.</h2>
+                  <p className="text-sm text-muted-foreground">Tap the link we sent to <span className="font-semibold text-foreground">{email}</span> on this phone to sign in.</p>
+                </div>
+                <button type="button" onClick={handleSignInLink} disabled={committing} className="text-sm font-semibold text-foreground hover:opacity-70">{committing ? 'Sending…' : 'Resend link'}</button>
+              </div>
             )}
           </div>
         )}
