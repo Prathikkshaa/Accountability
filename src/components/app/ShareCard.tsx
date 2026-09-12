@@ -54,17 +54,17 @@ export function ShareCard({ bigNumber, unit, caption, onClose }: ShareCardProps)
     ctx.font = '800 340px system-ui, sans-serif';
     ctx.fillText(String(bigNumber), W / 2, cy + 560);
 
-    // flame accent
-    ctx.font = '160px serif';
-    ctx.fillText('🔥', W / 2, cy + 760);
-
     // unit
     ctx.fillStyle = fg; ctx.font = '700 60px system-ui, sans-serif';
-    ctx.fillText(unit, W / 2, cy + 880);
+    ctx.fillText(unit, W / 2, cy + 740);
+
+    // small warm rule under the number
+    ctx.strokeStyle = warm; ctx.lineWidth = 6; ctx.beginPath();
+    ctx.moveTo(W / 2 - 60, cy + 800); ctx.lineTo(W / 2 + 60, cy + 800); ctx.stroke();
 
     // caption
     ctx.fillStyle = warm; ctx.font = '600 44px system-ui, sans-serif';
-    ctx.fillText(caption, W / 2, cy + 960);
+    ctx.fillText(caption, W / 2, cy + 890);
 
     // footer
     ctx.fillStyle = muted; ctx.font = '500 30px system-ui, sans-serif';
@@ -86,7 +86,7 @@ export function ShareCard({ bigNumber, unit, caption, onClose }: ShareCardProps)
     <div className="fixed inset-0 z-50 flex items-center justify-center p-5" onClick={onClose}>
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in" />
       <div className="relative w-full max-w-xs space-y-3 animate-rise-in" onClick={e => e.stopPropagation()}>
-        <canvas ref={ref} className="w-full rounded-3xl border border-border shadow-xl" />
+        <canvas ref={ref} className="w-full rounded-3xl border border-border shadow-soft" />
         <div className="flex gap-2">
           <button onClick={download} className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-full bg-primary text-primary-foreground font-bold text-sm"><Download className="w-4 h-4" /> Save image</button>
           <button onClick={onClose} className="w-12 rounded-full border border-border flex items-center justify-center text-muted-foreground"><X className="w-5 h-5" /></button>

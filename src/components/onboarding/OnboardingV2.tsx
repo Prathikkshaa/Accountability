@@ -526,7 +526,7 @@ export function OnboardingV2() {
 
       {showReset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 space-y-4 shadow-xl">
+          <div className="w-full max-w-sm bg-card border border-border rounded-3xl p-6 space-y-4 shadow-soft">
             <h3 className="text-base font-bold">Start over?</h3>
             <p className="text-sm text-muted-foreground">You'll lose what you've entered so far.</p>
             <div className="flex justify-end gap-2 pt-1">

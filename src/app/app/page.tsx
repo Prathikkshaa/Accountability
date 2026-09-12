@@ -292,7 +292,7 @@ export default function TodayPage() {
         </div>
       )}
 
-      {toast && <div className="fixed bottom-24 inset-x-0 z-[55] flex justify-center px-5 animate-rise-in"><div className="px-4 py-2.5 rounded-full bg-foreground text-background text-sm font-semibold shadow-lg">{toast}</div></div>}
+      {toast && <div className="fixed bottom-24 inset-x-0 z-[55] flex justify-center px-5 animate-rise-in"><div className="px-4 py-2.5 rounded-full bg-foreground text-background text-sm font-semibold shadow-soft">{toast}</div></div>}
     </div>
   );
 }

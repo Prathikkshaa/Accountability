@@ -53,7 +53,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Bottom tab bar */}
       <nav className="fixed bottom-0 inset-x-0 z-40">
         <div className="max-w-xs mx-auto px-5 pb-4">
-          <div className="flex items-center justify-around rounded-full border border-border bg-card/90 backdrop-blur-md shadow-lg px-3 py-2">
+          <div className="flex items-center justify-around rounded-full border border-border bg-card/90 backdrop-blur-md shadow-soft px-3 py-2">
             {TABS.map(t => {
               const active = t.href === '/app' ? pathname === '/app' : pathname.startsWith(t.href);
               const Icon = t.icon;

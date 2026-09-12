@@ -101,6 +101,8 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 .eyebrow { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.01em; color: var(--muted-foreground); }
 .tnum { font-variant-numeric: tabular-nums; }
 .hairline { border-color: var(--border); }
+/* Ultra-diffuse, low-opacity elevation — the only shadow used app-wide. */
+.shadow-soft { box-shadow: 0 8px 28px -14px rgba(0, 0, 0, 0.16); }
 
 /* Restrained animations */
 @keyframes fadeIn {

@@ -10,10 +10,10 @@ import { GoalCheckRow } from '@/components/app/GoalCheckRow';
 import { ShareCard } from '@/components/app/ShareCard';
 
 const NUDGE_PRESETS = [
-  { type: 'COMPLETION_PUSH' as const, label: 'Your move 👀', message: "Your move today! You've got this." },
-  { type: 'CELEBRATION' as const, label: 'Proud of you 🎉', message: "Proud of you for showing up." },
-  { type: 'MISSED_DAY_SUPPORT' as const, label: 'Here for you 🤝', message: "No streak lasts without a wobble. Back at it tomorrow." },
-  { type: 'STREAK_WARNING' as const, label: "Don't break it 🔥", message: "Don't let the streak slip today!" },
+  { type: 'COMPLETION_PUSH' as const, label: 'Your move', message: "Your move today. You've got this." },
+  { type: 'CELEBRATION' as const, label: 'Proud of you', message: 'Proud of you for showing up.' },
+  { type: 'MISSED_DAY_SUPPORT' as const, label: 'Here for you', message: 'No streak lasts without a wobble. Back at it tomorrow.' },
+  { type: 'STREAK_WARNING' as const, label: "Don't break it", message: "Don't let the streak slip today." },
 ];
 
 export default function PartnersPage() {
