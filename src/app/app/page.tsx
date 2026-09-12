@@ -12,6 +12,7 @@ import { GoalCheckRow, goalTargetSummary } from '@/components/app/GoalCheckRow';
 import { NewGoalModal } from '@/components/app/NewGoalModal';
 import { CheckInSheet, CheckInPayload } from '@/components/app/CheckInSheet';
 import { playCheckInSound, playCelebrationSound, haptic, soundEnabled } from '@/lib/sound';
+import { supabase } from '@/lib/supabase';
 
 const MILESTONES = [3, 7, 14, 21, 30, 50, 75, 100];
 const MOOD_EMOJI: Record<MoodState, string> = { BAD: '😞', MEH: '😐', GOOD: '🙂', GREAT: '😄', AMAZING: '🤩' };
@@ -39,7 +40,18 @@ export default function TodayPage() {
     const [meRes, g, p, n, gr] = await Promise.all([getMe(), getGoals(), getPartnerships(), getNudges(), getPendingGrace()]);
     setMe(meRes.currentUser); setGoals(g); setPartners(p); setNudges(n); setGrace(gr); setLoading(false);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // Live updates: refetch when partner activity or nudges/grace change.
+    const ch = supabase
+      .channel('today-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'check_ins' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'nudges' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'grace_requests' }, () => load())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const flashToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2200); };
 
@@ -103,7 +115,6 @@ export default function TodayPage() {
           <h1 className="text-[28px] leading-tight font-extrabold tracking-tight mt-0.5">{greeting()},<br />{me?.name.split(' ')[0]}.</h1>
         </div>
         <div className="flex items-center gap-1 -mr-1">
-          <Link href="/app/groups" className="w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Circles"><UsersRound className="w-[18px] h-[18px]" /></Link>
           <button onClick={() => setShowBell(true)} className="relative w-9 h-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Notifications">
             <Bell className="w-[18px] h-[18px]" />
             {bellCount > 0 && <span className="absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full bg-danger" />}

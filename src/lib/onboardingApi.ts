@@ -84,40 +84,29 @@ export function mapCommitmentToGoal(input: CommitmentInput): MappedGoal {
 }
 
 export interface CommitResult {
-  userId: string;
   goalIds: string[];
   inviteCode: string;
 }
 
-// Runs the whole "make it real" transaction against the in-browser store:
-// create the user, one goal per promise, and an invite code.
+// The signed-in user is already created (via email OTP). This saves their
+// profile name, creates one goal per promise, and generates an invite code.
 export async function commitOnboarding(params: {
   name: string;
+  email: string;
   commitments: CommitmentInput[];
   reminderTime?: string;
 }): Promise<CommitResult> {
-  const { dbStore } = await import('./store');
-  const { getTodayDateString } = await import('./utils');
+  const { upsertProfile, createGoal, generateInvite } = await import('./appApi');
 
-  const user = dbStore.createUser({
-    name: params.name,
-    email: `${params.name.toLowerCase().replace(/\s+/g, '')}@example.com`,
-    avatarUrl: '',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-  });
+  await upsertProfile({ name: params.name, email: params.email });
 
   const goalIds: string[] = [];
   for (const commitment of params.commitments) {
     const mapped = mapCommitmentToGoal(commitment);
-    const goal = dbStore.createGoal({
-      userId: user.id,
-      ...mapped,
-      startDate: getTodayDateString(),
-      reminderTime: params.reminderTime,
-    });
+    const { goal } = await createGoal({ ...mapped, reminderTime: params.reminderTime });
     goalIds.push(goal.id);
   }
 
-  const invite = dbStore.generateInviteCode(user.id);
-  return { userId: user.id, goalIds, inviteCode: invite.code };
+  const { invite } = await generateInvite();
+  return { goalIds, inviteCode: invite.code };
 }

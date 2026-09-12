@@ -7,6 +7,8 @@ import { Home, Heart, LucideIcon } from 'lucide-react';
 import { clsx } from 'clsx';
 import { ThemeController } from '@/components/app/ThemeController';
 import { ReminderScheduler } from '@/components/app/ReminderScheduler';
+import { currentUserId } from '@/lib/supabase';
+import { acceptInvite } from '@/lib/appApi';
 
 interface Tab {
   href: string;
@@ -26,13 +28,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
-  // First-run gate: if onboarding hasn't been finished on this device, send
-  // any app screen back to onboarding first (covers direct /app links too).
+  // Auth gate: no Supabase session → send to onboarding/sign-in first.
   useEffect(() => {
-    try {
-      if (localStorage.getItem('onboarded') !== '1') { router.replace('/'); return; }
-    } catch {}
-    setReady(true);
+    currentUserId()
+      .then(async id => {
+        if (!id) { router.replace('/'); return; }
+        // Auto-pair if they arrived via an invite link before signing in.
+        try {
+          const pending = localStorage.getItem('pendingInvite');
+          if (pending) { localStorage.removeItem('pendingInvite'); await acceptInvite(pending); }
+        } catch {}
+        setReady(true);
+      })
+      .catch(() => router.replace('/'));
   }, [router]);
 
   return (

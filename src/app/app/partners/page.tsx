@@ -208,7 +208,12 @@ function AddPartner({ me, onClose, onPaired }: { me: User | null; onClose: () =>
     if (tab === 'share' && !code) generateInvite().then(r => setCode(r.invite.code)).catch(() => {});
   }, [tab, code]);
 
-  const copy = () => { navigator.clipboard?.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const inviteLink = () => {
+    if (typeof window === 'undefined' || !code) return '';
+    const base = window.location.href.split('/app')[0]; // origin + basePath
+    return `${base}/join?code=${code}`;
+  };
+  const copyLink = () => { navigator.clipboard?.writeText(inviteLink()); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   const join = async () => {
     setJoinErr(null);
     try {
@@ -231,13 +236,14 @@ function AddPartner({ me, onClose, onPaired }: { me: User | null; onClose: () =>
 
       {tab === 'share' ? (
         <div className="space-y-3 text-center">
-          <p className="text-sm text-muted-foreground">Share this private code with someone you trust.</p>
+          <p className="text-sm text-muted-foreground">Send this link to the person you want beside you. They tap it, sign up, and you're paired.</p>
           <div className="rounded-2xl border border-border bg-background p-5">
             <span className="text-4xl font-mono font-bold tracking-[0.15em]">{code || '······'}</span>
           </div>
-          <button onClick={copy} disabled={!code} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">
-            {copied ? <><Check className="w-4 h-4" /> Copied</> : <><Copy className="w-4 h-4" /> Copy code</>}
+          <button onClick={copyLink} disabled={!code} className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-40">
+            {copied ? <><Check className="w-4 h-4" /> Link copied</> : <><Copy className="w-4 h-4" /> Copy invite link</>}
           </button>
+          <p className="text-[11px] text-muted-foreground">Or share just the code above for them to type in.</p>
         </div>
       ) : joined ? (
         <div className="py-8 text-center space-y-2">

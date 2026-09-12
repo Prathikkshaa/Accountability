@@ -2,12 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Copy, Loader2, Lock, ShieldCheck, Users, Sparkles, Plus, RefreshCw, X } from 'lucide-react';
+import { Check, Copy, Loader2, Lock, ShieldCheck, Users, Sparkles, Plus, RefreshCw, X, Mail } from 'lucide-react';
 import { clsx } from 'clsx';
 import { PromiseList } from './PromiseList';
 import { commitOnboarding, CommitmentInput } from '@/lib/onboardingApi';
+import { sendEmailCode, verifyEmailCode } from '@/lib/appApi';
+import { currentUserId } from '@/lib/supabase';
 
-type Moment = 'welcome' | 'goal' | 'commit' | 'why' | 'you' | 'invite' | 'done';
+type Moment = 'welcome' | 'goal' | 'commit' | 'why' | 'you' | 'verify' | 'invite' | 'done' | 'signin';
 
 interface GoalPreset {
   label: string;
@@ -53,13 +55,16 @@ export function OnboardingV2() {
   const [moment, setMoment] = useState<Moment>('welcome');
   const [history, setHistory] = useState<Moment[]>(['welcome']);
 
-  // First-run gate: once someone has finished onboarding, jump straight
-  // to the app on future launches instead of showing it again.
+  // If already signed in, skip onboarding and go straight to the app.
   useEffect(() => {
-    try { if (localStorage.getItem('onboarded') === '1') router.replace('/app'); } catch {}
+    currentUserId().then(id => { if (id) router.replace('/app'); }).catch(() => {});
   }, [router]);
 
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [goals, setGoals] = useState<SelectedGoal[]>([]);
   const [timing, setTiming] = useState<string>("I'll decide each day");
   const [reason, setReason] = useState('');
@@ -123,19 +128,33 @@ export function OnboardingV2() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const runCommit = async () => {
-    setCommitting(true);
-    setCommitError(null);
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  // Step 1: send the 6-digit code to their email.
+  const handleSendCode = async () => {
+    if (!name.trim() || !emailValid) return;
+    setCommitting(true); setAuthError(null);
     try {
+      await sendEmailCode(email.trim());
+      setCodeSent(true);
+      goTo('verify');
+    } catch (e: any) {
+      setAuthError(e?.message || 'Could not send the code. Try again.');
+    } finally { setCommitting(false); }
+  };
+
+  // Step 2: verify the code, then create profile + goals + invite.
+  const handleVerify = async () => {
+    if (code.trim().length < 6) return;
+    setCommitting(true); setAuthError(null);
+    try {
+      await verifyEmailCode(email.trim(), code.trim());
       const commitments: CommitmentInput[] = goals.map(g => ({
-        goal: g.label,
-        amount: g.amount,
-        frequency: g.freq,
-        timing,
-        category: g.category,
+        goal: g.label, amount: g.amount, frequency: g.freq, timing, category: g.category,
       }));
       const result = await commitOnboarding({
         name: name.trim() || 'Friend',
+        email: email.trim(),
         commitments,
         reminderTime: timingToReminder(timing),
       });
@@ -143,10 +162,20 @@ export function OnboardingV2() {
       setCommitted(true);
       goTo('invite');
     } catch (e: any) {
-      setCommitError(e?.message || 'Something went wrong. Please try again.');
-    } finally {
-      setCommitting(false);
-    }
+      setAuthError(e?.message || 'That code didn\'t work. Check and try again.');
+    } finally { setCommitting(false); }
+  };
+
+  // Returning users: sign in with email + code, then into the app.
+  const handleSignIn = async () => {
+    if (code.trim().length < 6) return;
+    setCommitting(true); setAuthError(null);
+    try {
+      await verifyEmailCode(email.trim(), code.trim());
+      router.push('/app');
+    } catch (e: any) {
+      setAuthError(e?.message || 'That code didn\'t work.');
+    } finally { setCommitting(false); }
   };
 
   const progressIdx = PROGRESS_ORDER.indexOf(moment) + 1;
@@ -205,13 +234,22 @@ export function OnboardingV2() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => goTo('goal')}
-              className="inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold text-base px-7 py-4 rounded-full hover:opacity-90 active:scale-[0.98] transition-all"
-            >
-              Pick my things
-            </button>
+            <div className="flex flex-col items-start gap-3">
+              <button
+                type="button"
+                onClick={() => goTo('goal')}
+                className="inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground font-semibold text-base px-7 py-4 rounded-full hover:opacity-90 active:scale-[0.98] transition-all"
+              >
+                Pick my things
+              </button>
+              <button
+                type="button"
+                onClick={() => { setCodeSent(false); setAuthError(null); goTo('signin'); }}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground"
+              >
+                Already have an account? <span className="text-foreground font-semibold">Sign in</span>
+              </button>
+            </div>
 
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-muted-foreground pt-2">
               <span className="inline-flex items-center gap-1.5"><Lock className="w-3.5 h-3.5" /> Private invites</span>
@@ -400,37 +438,82 @@ export function OnboardingV2() {
           <div className="space-y-6 animate-fade-in">
             <div className="space-y-1.5">
               <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Last thing, who's this?</h2>
-              <p className="text-sm text-muted-foreground">So your person knows who's showing up beside them.</p>
+              <p className="text-sm text-muted-foreground">Your name so your partner knows you, and an email to save your account.</p>
             </div>
 
-            <form onSubmit={e => { e.preventDefault(); if (name.trim() && !committing) runCommit(); }} className="space-y-5">
+            <form onSubmit={e => { e.preventDefault(); if (name.trim() && emailValid && !committing) handleSendCode(); }} className="space-y-4">
               <input
-                autoFocus
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="Your name"
+                autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
                 className="w-full text-2xl font-bold p-4 border-b-2 border-foreground bg-transparent focus:outline-none placeholder:text-muted-foreground/30"
+              />
+              <input
+                type="email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
+                className="w-full text-base p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground"
               />
 
               <PromiseList name={name} timing={timing} reason={reason} promises={goals} />
 
-              {commitError && (
-                <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger flex items-center justify-between gap-3">
-                  <span>{commitError}</span>
-                  <button type="button" onClick={runCommit} className="inline-flex items-center gap-1 font-semibold shrink-0">
-                    <RefreshCw className="w-3.5 h-3.5" /> Retry
-                  </button>
-                </div>
-              )}
+              {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
 
               <button
-                type="submit"
-                disabled={!name.trim() || committing}
+                type="submit" disabled={!name.trim() || !emailValid || committing}
                 className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40 hover:opacity-90 active:scale-[0.99] transition-all"
               >
-                {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Setting things up</>) : 'Lock it in'}
+                {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Sending code…</>) : (<><Mail className="w-4 h-4" /> Email me a code</>)}
               </button>
+              <p className="text-[11px] text-muted-foreground text-center">We'll email you a 6-digit code to confirm it's you.</p>
             </form>
+          </div>
+        )}
+
+        {/* VERIFY (onboarding) */}
+        {moment === 'verify' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="space-y-1.5">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Check your email.</h2>
+              <p className="text-sm text-muted-foreground">We sent a 6-digit code to <span className="font-semibold text-foreground">{email}</span>.</p>
+            </div>
+            <form onSubmit={e => { e.preventDefault(); if (!committing) handleVerify(); }} className="space-y-4">
+              <input
+                autoFocus value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                inputMode="numeric" placeholder="000000" maxLength={6}
+                className="w-full text-center text-3xl font-mono font-bold tracking-[0.4em] p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground"
+              />
+              {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
+              <button type="submit" disabled={code.length < 6 || committing} className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40">
+                {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Setting things up…</>) : 'Verify & finish'}
+              </button>
+              <button type="button" onClick={handleSendCode} className="w-full text-center text-xs font-medium text-muted-foreground hover:text-foreground">Resend code</button>
+            </form>
+          </div>
+        )}
+
+        {/* SIGN IN (returning users) */}
+        {moment === 'signin' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="space-y-1.5">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Welcome back.</h2>
+              <p className="text-sm text-muted-foreground">{codeSent ? `Enter the code we sent to ${email}.` : 'Sign in with your email.'}</p>
+            </div>
+            {!codeSent ? (
+              <form onSubmit={e => { e.preventDefault(); if (emailValid && !committing) handleSendCode(); }} className="space-y-4">
+                <input autoFocus type="email" inputMode="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
+                  className="w-full text-base p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground" />
+                {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
+                <button type="submit" disabled={!emailValid || committing} className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40">
+                  {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>) : (<><Mail className="w-4 h-4" /> Email me a code</>)}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={e => { e.preventDefault(); if (!committing) handleSignIn(); }} className="space-y-4">
+                <input autoFocus value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="000000" maxLength={6}
+                  className="w-full text-center text-3xl font-mono font-bold tracking-[0.4em] p-4 rounded-2xl border border-border bg-card focus:outline-none focus:border-foreground" />
+                {authError && <div className="p-3.5 rounded-2xl bg-danger/10 border border-danger/30 text-sm text-danger">{authError}</div>}
+                <button type="submit" disabled={code.length < 6 || committing} className="w-full inline-flex items-center justify-center gap-2 px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full disabled:opacity-40">
+                  {committing ? (<><Loader2 className="w-4 h-4 animate-spin" /> Signing in…</>) : 'Sign in'}
+                </button>
+              </form>
+            )}
           </div>
         )}
 
@@ -490,7 +573,7 @@ export function OnboardingV2() {
 
             <PromiseList className="text-left" name={name} timing={timing} reason={reason} promises={goals} />
 
-            <button type="button" onClick={() => { try { localStorage.setItem('onboarded', '1'); } catch {} router.push('/app'); }} className="block w-full px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full hover:opacity-90 transition-all">
+            <button type="button" onClick={() => router.push('/app')} className="block w-full px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full hover:opacity-90 transition-all">
               Enter my space
             </button>
             <button type="button" onClick={resetAll} className="text-xs font-medium text-muted-foreground hover:text-foreground">Replay</button>
