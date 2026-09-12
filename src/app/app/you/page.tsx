@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Lock, Eye, Archive, Flame, Bell, RotateCcw, Volume2, Sun, Moon, Monitor } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
 import type { User, Goal } from '@/lib/types';
 import { getMe, getGoals, patchGoal, archiveGoal } from '@/lib/appApi';
@@ -12,6 +13,7 @@ import { goalTargetSummary } from '@/components/app/GoalCheckRow';
 import { PALETTES, Palette, Mode, getPalette, getMode, setPalette, setMode } from '@/lib/theme';
 
 export default function YouPage() {
+  const router = useRouter();
   const [me, setMe] = useState<User | null>(null);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,9 +141,9 @@ export default function YouPage() {
         <p className="text-[11px] text-muted-foreground">Toggles save on this device. Reminders fire while the app is open or installed.</p>
       </section>
 
-      <a href="/" onClick={() => { try { localStorage.removeItem('onboarded'); } catch {} }} className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+      <button type="button" onClick={() => { try { localStorage.removeItem('onboarded'); } catch {} router.push('/'); }} className="flex items-center justify-center gap-2 w-full py-3 rounded-full border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
         <RotateCcw className="w-4 h-4" /> Replay onboarding
-      </a>
+      </button>
 
       {showNew && <NewGoalModal onClose={() => setShowNew(false)} onCreated={load} />}
     </div>

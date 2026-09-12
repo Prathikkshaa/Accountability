@@ -490,9 +490,9 @@ export function OnboardingV2() {
 
             <PromiseList className="text-left" name={name} timing={timing} reason={reason} promises={goals} />
 
-            <a href="/app" onClick={() => { try { localStorage.setItem('onboarded', '1'); } catch {} }} className="block w-full px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full hover:opacity-90 transition-all">
+            <button type="button" onClick={() => { try { localStorage.setItem('onboarded', '1'); } catch {} router.push('/app'); }} className="block w-full px-6 py-4 bg-primary text-primary-foreground font-bold text-sm rounded-full hover:opacity-90 transition-all">
               Enter my space
-            </a>
+            </button>
             <button type="button" onClick={resetAll} className="text-xs font-medium text-muted-foreground hover:text-foreground">Replay</button>
           </div>
         )}
